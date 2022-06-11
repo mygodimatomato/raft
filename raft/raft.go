@@ -90,8 +90,8 @@ func (r *Raft) appendEntries(req *pb.AppendEntriesRequest) (*pb.AppendEntriesRes
 
 	// TODO: (A.4) - if AppendEntries RPC received from new leader: convert to follower
 	// Log: r.logger.Info("receive request from leader, fallback to follower", zap.Uint64("term", r.currentTerm))
-	if uint64(req.GetLeaderId()) != uint64(r.votedFor) { // mygodimatomato : thinking what represents the new leader maybe leaderID ? or leadercommitID?
-		r.toFollower(req.Term)
+	if req.GetTerm() == r.currentTerm { // mygodimatomato : thinking what represents the new leader maybe leaderID ? or leadercommitID?
+		r.toFollower(req.GetTerm())
 	}
 
 	prevLogId := req.GetPrevLogId()
@@ -282,7 +282,7 @@ func (r *Raft) voteForSelf(grantedVotes *int) {
 	// TODO: (A.10) increment currentTerm
 	// TODO: (A.10) vote for self
 	// Hint: use `voteFor` to vote for self
-	r.currentTerm++
+	(*grantedVotes)++
 	r.voteFor(r.id, true)
 
 	r.logger.Info("vote for self", zap.Uint64("term", r.currentTerm))
@@ -324,6 +324,7 @@ func (r *Raft) handleVoteResult(vote *voteResult, grantedVotes *int, votesNeeded
 	// Log: r.logger.Info("receive new term on RequestVote response, fallback to follower", zap.Uint32("peer", vote.peerId))
 	if vote.GetTerm() > r.currentTerm {
 		r.toFollower(vote.GetTerm())
+		return
 	}
 
 	if vote.VoteGranted {
@@ -422,6 +423,7 @@ func (r *Raft) handleAppendEntriesResult(result *appendEntriesResult) {
 	// Log: r.logger.Info("receive new term on AppendEntries response, fallback to follower", zap.Uint32("peer", result.peerId))
 	if result.GetTerm() > r.currentTerm {
 		r.toFollower(result.GetTerm())
+		return
 	}
 
 	entries := result.req.GetEntries()

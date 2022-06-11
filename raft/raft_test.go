@@ -8,6 +8,7 @@ import (
 	"time"
 )
 
+// A
 func TestInitialElection(t *testing.T) {
 	c := newCluster(t, 5)
 	defer c.stopAll()
@@ -17,6 +18,7 @@ func TestInitialElection(t *testing.T) {
 	c.checkSingleLeader()
 }
 
+// A
 func TestElectionAfterLeaderDisconnect(t *testing.T) {
 	c := newCluster(t, 5)
 	defer c.stopAll()
@@ -40,6 +42,7 @@ func TestElectionAfterLeaderDisconnect(t *testing.T) {
 	}
 }
 
+// A
 func TestElectionAfterLeaderDisconnectLoop(t *testing.T) {
 	c := newCluster(t, 5)
 	defer c.stopAll()
@@ -67,6 +70,7 @@ func TestElectionAfterLeaderDisconnectLoop(t *testing.T) {
 	}
 }
 
+// A
 func TestFollowerDisconnect(t *testing.T) {
 	numNodes := 5
 
