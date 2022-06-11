@@ -90,7 +90,7 @@ func (r *Raft) appendEntries(req *pb.AppendEntriesRequest) (*pb.AppendEntriesRes
 
 	// TODO: (A.4) - if AppendEntries RPC received from new leader: convert to follower
 	// Log: r.logger.Info("receive request from leader, fallback to follower", zap.Uint64("term", r.currentTerm))
-	if req.GetLeaderCommitId() != uint64(r.votedFor) { // mygodimatomato : thinking what represents the new leader maybe leaderID ? or leadercommitID?
+	if uint64(req.GetLeaderId()) != uint64(r.votedFor) { // mygodimatomato : thinking what represents the new leader maybe leaderID ? or leadercommitID?
 		r.toFollower(req.Term)
 	}
 
@@ -142,8 +142,8 @@ func (r *Raft) requestVote(req *pb.RequestVoteRequest) (*pb.RequestVoteResponse,
 		return &pb.RequestVoteResponse{Term: r.currentTerm, VoteGranted: false}, nil
 	}
 
-	_, term := r.getLastLog()
-	if req.GetLastLogTerm() < term { // mygodimatomato: does req.LastLogTerm represents the candidates up-to-date log ?
+	LastLogId, LastLogTerm := r.getLastLog()
+	if req.GetLastLogTerm() < LastLogTerm || (req.GetLastLogTerm() == LastLogId && req.GetLastLogId() < LastLogId) {
 		// TODO: (A.7) - if votedFor is null or candidateId, and candidate’s log is at least as up-to-date as receiver’s log, grant vote
 		// Hint: (fix the condition) if the local last entry is more up-to-date than the candidate's last entry, reply false
 		// Hint: use `getLastLog` to get the last log entry
@@ -291,14 +291,14 @@ func (r *Raft) voteForSelf(grantedVotes *int) {
 func (r *Raft) broadcastRequestVote(ctx context.Context, voteCh chan *voteResult) {
 	r.logger.Info("broadcast request vote", zap.Uint64("term", r.currentTerm))
 
-	id, term := r.getLastLog()
+	LastLogId, LastLogTerm := r.getLastLog()
 	req := &pb.RequestVoteRequest{
 		// TODO: (A.11) - send RequestVote RPCs to all other servers (set all fields of `req`)
 		// Hint: use `getLastLog` to get the last log entry
 		Term:        r.currentTerm,
 		CandidateId: r.id,
-		LastLogId:   id,
-		LastLogTerm: term,
+		LastLogId:   LastLogId,
+		LastLogTerm: LastLogTerm,
 	}
 
 	// TODO: (A.11) - send RequestVote RPCs to all other servers (modify the code to send `RequestVote` RPCs in parallel)
@@ -306,13 +306,15 @@ func (r *Raft) broadcastRequestVote(ctx context.Context, voteCh chan *voteResult
 		peerId := peerId
 		peer := peer
 
-		resp, err := peer.RequestVote(ctx, req) // mygodimatomato: still thinking how to parallize
-		if err != nil {
-			r.logger.Error("fail to send RequestVote RPC", zap.Error(err), zap.Uint32("peer", peerId))
-			return
-		}
+		go func() {
+			resp, err := peer.RequestVote(ctx, req)
+			if err != nil {
+				r.logger.Error("fail to send RequestVote RPC", zap.Error(err), zap.Uint32("peer", peerId))
+				return
+			}
+			voteCh <- &voteResult{RequestVoteResponse: resp, peerId: peerId}
+		}()
 
-		voteCh <- &voteResult{RequestVoteResponse: resp, peerId: peerId}
 	}
 }
 
@@ -397,18 +399,20 @@ func (r *Raft) broadcastAppendEntries(ctx context.Context, appendEntriesResultCh
 
 		// TODO: (A.14) & (B.6)
 		// Hint: modify the code to send `AppendEntries` RPCs in parallel
-		resp, err := peer.AppendEntries(ctx, req)
-		if err != nil {
-			r.logger.Error("fail to send AppendEntries RPC", zap.Error(err), zap.Uint32("peer", peerId))
-			// connection issue, should not be handled
-			return
-		}
+		go func() {
+			resp, err := peer.AppendEntries(ctx, req)
+			if err != nil {
+				r.logger.Error("fail to send AppendEntries RPC", zap.Error(err), zap.Uint32("peer", peerId))
+				// connection issue, should not be handled
+				return
+			}
+			appendEntriesResultCh <- &appendEntriesResult{
+				AppendEntriesResponse: resp,
+				req:                   req,
+				peerId:                peerId,
+			}
+		}()
 
-		appendEntriesResultCh <- &appendEntriesResult{
-			AppendEntriesResponse: resp,
-			req:                   req,
-			peerId:                peerId,
-		}
 	}
 }
 
