@@ -1,0 +1,1 @@
+{"buildTargets":["bin/protoc-gen-go","bin/protoc-gen-go-grpc","proto"],"launchTargets":[],"customConfigurationProvider":{"workspaceBrowse":{"browsePath":[],"compilerArgs":[]},"fileIndex":[]}}
