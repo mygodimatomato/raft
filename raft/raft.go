@@ -100,7 +100,7 @@ func (r *Raft) appendEntries(req *pb.AppendEntriesRequest) (*pb.AppendEntriesRes
 
 	// TODO: (A.4) - if AppendEntries RPC received from new leader: convert to follower
 	// Log: r.logger.Info("receive request from leader, fallback to follower", zap.Uint64("term", r.currentTerm))
-	if req.GetTerm() == r.currentTerm { // mygodimatomato : thinking what represents the new leader maybe leaderID ? or leadercommitID?
+	if req.GetTerm() == r.currentTerm && r.state == Candidate { // mygodimatomato : thinking what represents the new leader maybe leaderID ? or leadercommitID?
 		r.toFollower(req.GetTerm())
 	}
 
@@ -110,8 +110,8 @@ func (r *Raft) appendEntries(req *pb.AppendEntriesRequest) (*pb.AppendEntriesRes
 		// TODO: (B.2) - reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm
 		// Hint: use `getLog` to get log with ID equals to prevLogId
 		// Log: r.logger.Info("the given previous log from leader is missing or mismatched", zap.Uint64("prevLogId", prevLogId), zap.Uint64("prevLogTerm", prevLogTerm), zap.Uint64("logTerm", log.GetTerm()))
-		r_log := r.getLog(prevLogId)
-		if r_log.GetTerm() != prevLogTerm { // mygodimatomato : this means that leader didn't have the latest version of the log
+		r_log := r.getLog(prevLogId)        //
+		if r_log.GetTerm() != prevLogTerm { // mygodimatomato : this means that follower's log is different compare to leader's log
 			return &pb.AppendEntriesResponse{Term: r.currentTerm, Success: false}, nil
 		}
 	}
@@ -121,7 +121,7 @@ func (r *Raft) appendEntries(req *pb.AppendEntriesRequest) (*pb.AppendEntriesRes
 		// TODO: (B.4) - append any new entries not already in the log
 		// Hint: use `deleteLogs` follows by `appendLogs`
 		// Log: r.logger.Info("receive and append new entries", zap.Int("newEntries", len(req.GetEntries())), zap.Int("numberOfEntries", len(r.logs)))
-		r.deleteLogs(prevLogId)        // mygodimatomato : this will delete the logs after the prevLogId
+		r.deleteLogs(prevLogId)        // mygodimatomato : this will delete the logs after the prevLogId to prevent inconsistency
 		r.appendLogs(req.GetEntries()) // mygodimatomato : this will add up the new entries
 	}
 
@@ -168,7 +168,7 @@ func (r *Raft) requestVote(req *pb.RequestVoteRequest) (*pb.RequestVoteResponse,
 	}
 
 	LastLogId, LastLogTerm := r.getLastLog()
-	if req.GetLastLogTerm() < LastLogTerm || (req.GetLastLogTerm() == LastLogId && req.GetLastLogId() < LastLogId) {
+	if req.GetLastLogTerm() < LastLogTerm || (req.GetLastLogTerm() == LastLogTerm && req.GetLastLogId() < LastLogId) {
 		// TODO: (A.7) - if votedFor is null or candidateId, and candidate’s log is at least as up-to-date as receiver’s log, grant vote
 		// Hint: (fix the condition) if the local last entry is more up-to-date than the candidate's last entry, reply false
 		// Hint: use `getLastLog` to get the last log entry
@@ -472,6 +472,7 @@ func (r *Raft) handleAppendEntriesResult(result *appendEntriesResult) {
 		r.setNextAndMatchIndex(result.peerId, entries[len(entries)-1].GetId()+1, entries[len(entries)-1].GetId())
 	}
 
+	// mygodimatomato : this step is for the leader to decide whether to commit the log to state machine (5.3)
 	replicasNeeded := (len(r.peers)+1)/2 + 1
 
 	logs := r.getLogs(r.commitIndex + 1)
@@ -480,20 +481,26 @@ func (r *Raft) handleAppendEntriesResult(result *appendEntriesResult) {
 		// Hint: find if such N exists
 		// Hint: if such N exists, use `setCommitIndex` to set commit index
 		// Hint: if such N exists, use `applyLogs` to apply logs
+
 		N := logs[i].GetId()
+
+		if logs[i].GetTerm() != r.currentTerm {
+			continue
+		}
 
 		if N > r.commitIndex {
 			replicas := 1
 
 			for peerId := range r.peers {
-				if r.matchIndex[peerId] >= logs[i].GetId() {
-					replicas += 1
+				if r.matchIndex[peerId] >= N {
+					replicas++
 				}
 			}
 
 			if replicas >= replicasNeeded { // mygodimatomato : N exist
 				r.setCommitIndex(N)
 				go r.applyLogs(r.applyCh)
+				break
 			}
 		}
 	}
