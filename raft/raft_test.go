@@ -153,10 +153,12 @@ func TestLogReplicationWithFollowerFailure(t *testing.T) {
 
 	peerId := randomPeerId(leaderId, numNodes)
 	c.disconnectAll(peerId)
+	c.disconnect(leaderId, peerId)
 
 	numLogs := 10
 
 	for i := 1; i <= numLogs; i++ {
+		// time.Sleep(1 * time.Second)
 		data := []byte("command " + strconv.Itoa(i))
 
 		go func() {
@@ -180,8 +182,9 @@ func TestLogReplicationWithFollowerFailure(t *testing.T) {
 
 	// follower comes back from network partition, should catch up all missing logs
 	c.connectAll(peerId)
+	c.connect(leaderId, peerId)
 
-	time.Sleep(1 * time.Second)
+	time.Sleep(2 * time.Second)
 	for i := 1; i <= numLogs; i++ {
 		c.checkLog(peerId, uint64(i), leaderTerm, nil)
 	}
