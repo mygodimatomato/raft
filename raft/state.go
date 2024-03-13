@@ -118,6 +118,10 @@ func (rs *raftState) getLogs(startId uint64) []*pb.Entry {
 	}
 
 	lastLog := rs.logs[len(rs.logs)-1]
+
+	if lastLog.GetId() < startId {
+		return []*pb.Entry{}
+	}
 	logIdDiff := int(lastLog.GetId() - startId)
 	if len(rs.logs)-1-logIdDiff < 0 {
 		return []*pb.Entry{}
@@ -169,6 +173,15 @@ func (rs *raftState) applyLogs(applyCh chan<- *pb.Entry) {
 
 		rs.lastApplied = log.GetId()
 	}
+}
+
+func (rs *raftState) getFisrtIndexForConflictTerm(term uint64) uint64 {
+	for i := len(rs.logs) - 1; i >= 0; i-- {
+		if rs.logs[i].GetTerm() == term-1 {
+			return rs.logs[i].GetId() + 1
+		}
+	}
+	return 1
 }
 
 func (rs *raftState) toFollower(term uint64) {

@@ -32,7 +32,7 @@ message AppendEntriesResponse {
 	bool success = 2;
 	uint64 MatchIndex = 3;
 	uint64 ConflictTerm = 4;
-	uint64 FisrtIndeForConflictTerm=5;
+	uint64 FirstIndexForConflictTerm = 5;
 }
 
 message RequestVoteRequest {

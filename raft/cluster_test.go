@@ -37,6 +37,7 @@ func (c *consumer) start(ctx context.Context) {
 			return
 
 		case e := <-c.raft.ApplyCh():
+			// c.raft.logger.Debug("consumer consume log", zap.Uint64("log id", e.Id), zap.Uint64("log term", e.Term), zap.ByteString("data", e.Data))
 			c.mu.Lock()
 			c.logs[e.Id] = e
 			c.mu.Unlock()

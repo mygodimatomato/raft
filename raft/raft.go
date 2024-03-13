@@ -92,16 +92,24 @@ func (r *Raft) appendEntries(req *pb.AppendEntriesRequest) (*pb.AppendEntriesRes
 	// verify the last log entry
 	prevLogId := req.GetPrevLogId()
 	prevLogTerm := req.GetPrevLogTerm()
+
+	// follower examines its log to find an entry matching the `prevLogId` and `prevLogTerm`
 	if prevLogId != 0 && prevLogTerm != 0 {
+		// r.logger.Info("prevLogId and prevLogTerm are not zero", zap.Uint64("prevLogId", prevLogId), zap.Uint64("prevLogTerm", prevLogTerm))
 		log := r.getLog(prevLogId)
 
 		if prevLogTerm != log.GetTerm() {
+			conflictTerm := log.GetTerm()
+			firstIndexForConflictTerm := r.getFisrtIndexForConflictTerm(conflictTerm)
+
 			r.logger.Info("the given previous log from leader is missing or mismatched",
 				zap.Uint64("prevLogId", prevLogId),
 				zap.Uint64("prevLogTerm", prevLogTerm),
-				zap.Uint64("logTerm", log.GetTerm()))
+				zap.Uint64("logTerm", log.GetTerm()),
+				zap.Uint64("firstIndexForConflictTerm", firstIndexForConflictTerm))
 
-			return &pb.AppendEntriesResponse{Term: r.currentTerm, Success: false}, nil
+			// get the conflicting term and First index for conflict term
+			return &pb.AppendEntriesResponse{Term: r.currentTerm, Success: false, ConflictTerm: conflictTerm, FirstIndexForConflictTerm: firstIndexForConflictTerm}, nil
 		}
 	}
 
@@ -178,6 +186,13 @@ func (r *Raft) Run(ctx context.Context) {
 	if err := r.loadRaftState(r.persister); err != nil {
 		r.logger.Error("fail to load raft state", zap.Error(err))
 		return
+	}
+
+	// re-apply logs if there are any
+	if len(r.logs) > 0 {
+		// setup commit index
+		r.setCommitIndex(uint64(len(r.logs)))
+		r.applyLogs(r.applyCh)
 	}
 
 	r.logger.Info("starting raft",
@@ -433,7 +448,7 @@ func (r *Raft) handleAppendEntriesResult(result *appendEntriesResult) {
 
 	if !result.GetSuccess() {
 		// if failed, decrease `nextIndex` and retry
-		nextIndex := r.nextIndex[peerId] - 1
+		nextIndex := result.FirstIndexForConflictTerm
 		matchIndex := r.matchIndex[peerId]
 		r.setNextAndMatchIndex(peerId, nextIndex, matchIndex)
 

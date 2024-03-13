@@ -152,13 +152,15 @@ func TestLogReplicationWithFollowerFailure(t *testing.T) {
 	leaderId, leaderTerm := c.checkSingleLeader()
 
 	peerId := randomPeerId(leaderId, numNodes)
-	c.disconnectAll(peerId)
-	c.disconnect(leaderId, peerId)
 
 	numLogs := 10
 
 	for i := 1; i <= numLogs; i++ {
-		// time.Sleep(1 * time.Second)
+		time.Sleep(1 * time.Second)
+		if i == 2 {
+			c.disconnectAll(peerId)
+			c.disconnect(leaderId, peerId)
+		}
 		data := []byte("command " + strconv.Itoa(i))
 
 		go func() {
@@ -184,7 +186,7 @@ func TestLogReplicationWithFollowerFailure(t *testing.T) {
 	c.connectAll(peerId)
 	c.connect(leaderId, peerId)
 
-	time.Sleep(2 * time.Second)
+	time.Sleep(1 * time.Second)
 	for i := 1; i <= numLogs; i++ {
 		c.checkLog(peerId, uint64(i), leaderTerm, nil)
 	}
@@ -437,6 +439,62 @@ func TestCannotCommitLogIfTermMismatch(t *testing.T) {
 		c.checkLog(id, 1, oldLeaderTerm, data1)
 		c.checkLog(id, 2, oldLeaderTerm, data2)
 		c.checkLog(id, 3, leaderTerm, data3)
+	}
+}
+
+func TestServerReboot(t *testing.T) {
+	numNodes := 5
+
+	c := newCluster(t, numNodes)
+	defer c.stopAll()
+
+	time.Sleep(1 * time.Second)
+	leaderId, leaderTerm := c.checkSingleLeader()
+
+	numLogs := 3
+
+	for i := 1; i <= numLogs; i++ {
+		data := []byte("command " + strconv.Itoa(i))
+
+		go func() {
+			c.applyCommand(leaderId, leaderTerm, data)
+		}()
+	}
+
+	time.Sleep(1 * time.Second)
+
+	c.stopAll()
+
+	time.Sleep(1 * time.Second)
+
+	for i := 1; i <= numNodes; i++ {
+		id := uint32(i)
+		c.initialize(id)
+	}
+
+	for i := 1; i <= numNodes; i++ {
+		id := uint32(i)
+		c.connectAll(id)
+	}
+
+	for i := 1; i <= numNodes; i++ {
+		id := uint32(i)
+		c.start(id)
+	}
+
+	time.Sleep(2 * time.Second)
+
+	leaderId, leaderTerm = c.checkSingleLeader()
+
+	for i := 1; i <= numNodes; i++ {
+		id := uint32(i)
+		if id != leaderId {
+			for j := 1; j <= numLogs; j++ {
+				// get the leader's log term
+				LogTerm := c.rafts[leaderId].raftState.logs[j-1].GetTerm()
+				c.checkLog(id, uint64(j), LogTerm, nil)
+			}
+		}
 	}
 }
 
