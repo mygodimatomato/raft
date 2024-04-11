@@ -174,7 +174,12 @@ You should pass tests `TestInitialElection`, `TestElectionAfterLeaderDisconnect`
 
 Finish TODO B.1 ~ B.9.
 
-You should pass all tests after part A and B are finished.
+You should pass tests `TestSingleLogReplication`,`TestManyLogsReplication`,`TestLogReplicationWithFollowerFailure`,`TestLogReplicationWithLeaderFailover` and the previous tests after part B is finished
+
+
+## Persistence (Part C)
+Finish TODO C.1 ~ C.4
+You should pass all tests after part A, B and C are finished.
 
 # Verification
 
