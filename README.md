@@ -178,7 +178,8 @@ You should pass tests `TestSingleLogReplication`,`TestManyLogsReplication`,`Test
 
 
 ## Persistence (Part C)
-Finish TODO C.1 ~ C.4
+Finish TODO C.1 ~ C.4.
+
 You should pass all tests after part A, B and C are finished.
 
 # Verification
@@ -191,9 +192,3 @@ go test -timeout 60s -race -count 1 ./...
 
 If the test does not pass, it is suggested to understand what is the test testing for, then using the log to find out bugs and errors. For example, the `TestLogReplicationWithFollowerFailure` test is testing for “a disconnected follower should not affect the log replication to other followers” and “after the follower comes back, the missing logs should be replicated to the follower”. If you have hard time understanding the test cases, please feel free to contact me 😊。
 
-# Future Work
-
-There are many other works can be done to improve the Raft we designed, the following are some:
-
-1. Log compaction: It is not practical for a long-running Raft server to store the complete logs forever. Instead, store a snapshot of the state from time. So Raft can discards log entries that precede the snapshot.
-2. The paper mentioned that **"if AppendEntries fails because of log inconsistency: decrement nextIndex and retry"**. In the implementation, `nextEntry` decrease by 1 at once, it may need to retry too many times if the replication lag is huge. By adding more information to the `AppendEntries` RPC's response, can you find a way to know how much should `nextEntry` decrease if log inconsistency occur?
